@@ -101,8 +101,6 @@ sub new(%) {
 	# получаем информацию о событии
 	if (
 		( ref $self->{ site }->{ dbh } eq 'DBI::db' ) && 
-		( defined $self->{ site }->{user}->{idorgdetails} ) && 
-		( $self->{ site }->{user}->{idorgdetails} > 0 ) &&
 		( $self->{event}->{idevents} > 0 )
 	) {
 		my $hr;
@@ -132,9 +130,6 @@ sub new(%) {
 		$self->{ err } = 'Не могу прочитать информацию о событии.';
 		warn ( __PACKAGE__.' - Can not read event info from DB:'.
 			(( ref $self->{ site }->{ dbh } ne 'DBI::db' )					? ' no_DBI_connection' : '').
-			(( not defined $self->{ site }->{ user }->{ idorgdetails } )	? ' not_defined_idorgdetails' : ''). 
-			(( defined $self->{ site }->{ user }->{ idorgdetails } && 
-				( $self->{ site }->{ user }->{ idorgdetails } < 1 ) )		? ' wrong_idorgdetails' : '').
 			(( $self->{ event }->{ idevents } < 1 )							? ' wrong_idevents' : '')
 		);
 	    return $self;
@@ -198,13 +193,12 @@ sub _check_previous_report() {
 
 	my ($ideventlog, $eventdatefact, $eventfilename, $eventfilenamexml) = $self->{ site }->{ dbh }->selectrow_array(
 		"SELECT ideventslog, eventdatefact, eventfilename, eventfilenamexml FROM events_log ".
-		"WHERE events_list_idevents = $self->{event}->{idevents} ".
-		"AND orgdetails_idorgdetails = $self->{site}->{user}->{idorgdetails}"
+		"WHERE events_list_idevents = $self->{event}->{idevents}"
 	);
 	if (defined $ideventlog) {
 
-		my $ExcelTargetFile = $self->{site}->{cfg}->{env}->{USER_PATH}.'/'.$self->{site}->{user}->{idorgdetails}.'/'.$eventfilename;
-		my $XMLTargetFile = $self->{site}->{cfg}->{env}->{USER_PATH}.'/'.$self->{site}->{user}->{idorgdetails}.'/XML/'.$eventfilenamexml;
+		my $ExcelTargetFile = $self->{site}->{cfg}->{env}->{USER_PATH}.'/'.$eventfilename;
+		my $XMLTargetFile = $self->{site}->{cfg}->{env}->{USER_PATH}.'/XML/'.$eventfilenamexml;
 
 		if ( (defined $eventfilename) && (-e $ExcelTargetFile) ) { # Запись в логах об отчете есть. Если файл тоже есть - выходим с ошибкой.
 			$step_check->{status} = 1;
@@ -221,7 +215,7 @@ sub _check_previous_report() {
 			# Значит удаляем запись из БД и можно заново сформировать отчет.
 
 			eval {
-				$self->{ site }->{ dbh }->do("DELETE FROM events_log WHERE events_list_idevents = $self->{event}->{idevents} AND orgdetails_idorgdetails = $self->{site}->{user}->{idorgdetails}");
+				$self->{ site }->{ dbh }->do("DELETE FROM events_log WHERE events_list_idevents = $self->{event}->{idevents}");
 			};
 			if ($@ || $self->{ site }->{ dbh }->errstr) {
 				# откат внутри eval, чтобы ошибка отката не привела к завершению работы сценария
@@ -348,10 +342,9 @@ sub log_event() {
 	my $pkg = shift;
 
 	eval {
-		my $sth = $pkg->{ site }->{ dbh }->prepare("INSERT INTO events_log SET eventdatefact = NOW(), eventfilename = ?, eventfilenamexml = ?, events_list_idevents = ?, orgdetails_idorgdetails = ?");
+		my $sth = $pkg->{ site }->{ dbh }->prepare("INSERT INTO events_log SET eventdatefact = NOW(), eventfilename = ?, eventfilenamexml = ?, events_list_idevents = ?");
 		$sth->execute( 
-			$pkg->{ event }->{ filename }->{ excel }, $pkg->{ event }->{ filename }->{ xml }, 
-			$pkg->{ event }->{ idevents }, $pkg->{ site }->{ user }->{ idorgdetails } 
+			$pkg->{ event }->{ filename }->{ excel }, $pkg->{ event }->{ filename }->{ xml } 
 		);
 	};
 	if ($@ || $pkg->{ site }->{ dbh }->errstr) {
